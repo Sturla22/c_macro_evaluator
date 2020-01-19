@@ -1,4 +1,6 @@
 import re
+import sys
+from argparse import ArgumentParser
 from typing import Dict, List
 
 
@@ -19,7 +21,7 @@ class MacroEvaluator:
         self.inactive_level = 0
         self.parse_lines()
 
-    def read_lines(self, file_name) -> List[str]:
+    def read_lines(self, file_name: str) -> List[str]:
         lines: List[str]
         with open(file_name, "r") as f:
             lines = f.readlines()
@@ -104,3 +106,42 @@ class MacroEvaluator:
                 macro = macro.replace(symbol, str(result))
             macro = self.LITERAL_SUFFIX_REGEX.sub(r"\1", macro)
         return eval(macro)
+
+
+def parse_options(args):
+    parser = ArgumentParser(args)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("file", help="A C/C++ file to evaluate with preprocessor.")
+    group.add_argument("-r", "--raw", help="Define a macro to evaluate directly.")
+
+    parser.add_argument("-m", "--macro", help="The macro to be evaluated.")
+    parser.add_argument(
+        "-I",
+        "--include_path",
+        action="append",
+        dest="include_paths",
+        help="Include path, works like gcc's -I",
+    )
+
+    return parser.parse_args()
+
+
+def main(args):
+    """
+    main function defined to allow for testing and calling the entire functionality
+    as a python module.
+    """
+    options = parse_options(args)
+
+    if options.file:
+        e = MacroEvaluator(file_name=options.file)
+    else:
+        e = MacroEvaluator(lines=options.raw.split("\n"))
+
+    if options.macro:
+        result = e.evaluate_macro(options.macro)
+        print(result)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
