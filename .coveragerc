@@ -1,5 +1,5 @@
 [run]
-source = C Macro Evaluator
+source = c_macro_evaluator
 
 [report]
 exclude_lines =

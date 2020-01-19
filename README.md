@@ -1,6 +1,14 @@
 # C Macro Evaluator
 
-## Setup
+An evaluator for C Macros. Implements the C/C++ preprocessor and enables testing of macros.
+
+## Usage
+
+To evaluate a macro called `HELLO` defined in the header file `hello_world.h` or any of its dependencies in the folder `include`:
+
+`c_macro_evaluator.py -f hello_world.h -I include -m HELLO`
+
+## Development Setup
 ```sh
 # Install dependencies
 pipenv install --dev

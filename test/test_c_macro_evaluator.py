@@ -1,4 +1,4 @@
-from c_macro_evaluator import c_macro_evaluator as dut
+import c_macro_evaluator.c_macro_evaluator as dut
 
 macro_str = "#define TEST"
 not_macro_str = "define TEST2"
