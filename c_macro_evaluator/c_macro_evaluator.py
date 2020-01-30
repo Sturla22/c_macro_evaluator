@@ -1,6 +1,6 @@
+import argparse
 import re
 import sys
-from argparse import ArgumentParser
 from typing import Dict, List
 
 
@@ -29,12 +29,28 @@ class MacroEvaluator:
 
     def handle_multiline(self, line, parsed_lines) -> bool:
         m = self.MULTILINE_REGEX.match(line)
+        multiline = True
         if m:
             line_groups = m.groups()
             # Append to the line that was just parsed.
             parsed_lines[-1][-2] += line_groups[0].strip()
-            return bool(line_groups[1])
-        return True
+            multiline = bool(line_groups[1])
+        return multiline
+
+    def handle_inactive(self, line, command):
+        if command == "error":
+            if line[2]:
+                raise UserWarning(line[2])
+            else:
+                raise UserWarning("Error directive hit")
+        elif command == "include":
+            # TODO(stla): Detect circular dependency.
+            if line[2]:
+                file_name = self.INCLUDE_REGEX.sub(r"\1", line[2])
+                e = MacroEvaluator(file_name=file_name)
+                self.symbols.update(e.symbols)
+            else:
+                raise UserWarning("Include without filename")
 
     def handle_directives(self, line):
         command = line[0].lower()
@@ -43,38 +59,26 @@ class MacroEvaluator:
             if command == "ifdef":
                 if symbol not in self.symbols or self.inactive_level:
                     self.inactive_level += 1
-            elif command == "ifndef" or self.inactive_level:
+            elif command == "ifndef":
                 if symbol in self.symbols:
                     self.inactive_level += 1
-            elif command == "if" or self.inactive_level:
+            elif command == "if":
                 if not self.evaluate_macro(symbol):
                     self.inactive_level += 1
-            elif command == "pragma" and not self.inactive_level:
-                if line[2]:
-                    print(line[2])
-            elif command == "undef" and not self.inactive_level:
-                del self.symbols[symbol]
-            elif command == "define" and not self.inactive_level:
-                if line[2]:
-                    self.symbols[symbol] = line[2]
-                else:
-                    self.symbols[symbol] = None
-        else:
-            if command == "endif" and self.inactive_level:
-                self.inactive_level -= 1
-            elif command == "error" and not self.inactive_level:
-                if line[2]:
-                    raise UserWarning(line[2])
-                else:
-                    raise UserWarning("Error directive hit")
-            elif command == "include" and not self.inactive_level:
-                # TODO(stla): Detect circular dependency.
-                if line[2]:
-                    file_name = self.INCLUDE_REGEX.sub(r"\1", line[2])
-                    e = MacroEvaluator(file_name=file_name)
-                    self.symbols.update(e.symbols)
-                else:
-                    raise UserWarning("Include without filename")
+            elif not self.inactive_level:
+                if command == "pragma":
+                    print(f"pragma {symbol}")
+                elif command == "undef":
+                    del self.symbols[symbol]
+                elif command == "define":
+                    if line[2]:
+                        self.symbols[symbol] = line[2]
+                    else:
+                        self.symbols[symbol] = None
+        elif not self.inactive_level:
+            self.handle_inactive(line, command)
+        elif command == "endif":
+            self.inactive_level -= 1
 
     def parse_lines(self) -> List[List[str]]:
         parsed_lines: List[List[str]] = []
@@ -109,9 +113,11 @@ class MacroEvaluator:
 
 
 def parse_options(args):
-    parser = ArgumentParser(args)
+    parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("file", help="A C/C++ file to evaluate with preprocessor.")
+    group.add_argument(
+        "-f", "--file", help="A C/C++ file to evaluate with preprocessor."
+    )
     group.add_argument("-r", "--raw", help="Define a macro to evaluate directly.")
 
     parser.add_argument("-m", "--macro", help="The macro to be evaluated.")
@@ -122,8 +128,11 @@ def parse_options(args):
         dest="include_paths",
         help="Include path, works like gcc's -I",
     )
+    options = parser.parse_args(args)
+    if options.file is None and options.raw is None:
+        parser.print_help()
 
-    return parser.parse_args()
+    return options
 
 
 def main(args):
@@ -135,8 +144,10 @@ def main(args):
 
     if options.file:
         e = MacroEvaluator(file_name=options.file)
-    else:
+    elif options.raw:
         e = MacroEvaluator(lines=options.raw.split("\n"))
+    else:
+        raise UserWarning()
 
     if options.macro:
         result = e.evaluate_macro(options.macro)
